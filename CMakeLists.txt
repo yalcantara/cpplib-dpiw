@@ -2,28 +2,14 @@ cmake_minimum_required(VERSION 3.10)
 project(main C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
-
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include_directories(include)
-include_directories(../external/odpi/include)
-link_libraries(ociei)
-link_directories(../external/instantclient_19_6)
-add_executable(main main.cpp ../external/odpi/embed/dpi.c)
+include_directories(../cpplib-core/include)
+include_directories(../odpi/include)
 
+add_executable(main main.cpp ../odpi/embed/dpi.c)
 
-
-#Uncomment the following line if dl lib is needed
 target_link_libraries(main ${CMAKE_DL_LIBS})
-
-
-
-find_package(Boost REQUIRED COMPONENTS system)
-find_package(OpenSSL 1.0.0 REQUIRED)
-
-
-target_link_libraries(main
-        cpprest
-        -lstdc++fs
-        Boost::boost
-        Boost::system
-        OpenSSL::SSL)

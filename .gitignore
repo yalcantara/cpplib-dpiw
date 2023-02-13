@@ -1,6 +1,14 @@
+# User defined
+Debug
+Docker_Debug
+Release
+logs
+build
+.vscode
+.idea
+
 # CMake
 CMakeFiles
-
 
 # Mac
 *.DS_Store
