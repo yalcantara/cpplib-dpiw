@@ -46,6 +46,16 @@ public:
             dpiContext_getError(ctx, err);
         }
 
+        // The only way dpiContext *ctx can be null, is when an error occurs during context creation.
+        // In this particular case, the dpiErrorInfo *err will be already populated with these 4 fields: message,
+        // messageLength, encoding, fnName and action.
+
+        /* https://oracle.github.io/odpi/doc/functions/dpiContext.html#c.dpiContext_createWithParams
+         * According to ODPI documentation:
+         * Note that the only members of the structure that should be examined when an error occurs are message,
+         * messageLength, encoding, fnName and action.
+         */
+
         string __fn = err->fnName;
         string __ac = err->action;
         string __tx{err->message, err->messageLength};
@@ -83,19 +93,18 @@ private:
     //---------------------------------------------
     dpiData *_data = nullptr; //not owned
     unsigned int _col = 0;
+    UInt32 _columnCount = 0;
     dpiNativeTypeNum _nativeTypeNum;
     //---------------------------------------------
 
 
     double dataToDouble() {
         if (_nativeTypeNum == DPI_NATIVE_TYPE_DOUBLE) {
-            double val = _data->value.asDouble;
-            return (double) val;
+            return _data->value.asDouble;
         }
 
         if (_nativeTypeNum == DPI_NATIVE_TYPE_FLOAT) {
-            float val = _data->value.asFloat;
-            return (double) val;
+            return _data->value.asFloat;
         }
 
         throw Exception(sfput("Could not convert column index ${} to double. "
@@ -105,13 +114,11 @@ private:
     Int64 dataToInt64() {
 
         if (_nativeTypeNum == DPI_NATIVE_TYPE_INT64) {
-            int64_t val = _data->value.asInt64;
-            return (Int64) val;
+            return _data->value.asInt64;
         }
 
         if (_nativeTypeNum == DPI_NATIVE_TYPE_DOUBLE) {
-            double val = _data->value.asDouble;
-            return (Int64) val;
+            return (Int64) _data->value.asDouble;
         }
 
         throw Exception(sfput("Could not convert column index ${} to Int32. "
@@ -121,8 +128,7 @@ private:
     dpiTimestamp dataToTimestamp() {
 
         if (_nativeTypeNum == DPI_NATIVE_TYPE_TIMESTAMP) {
-            dpiTimestamp val = _data->value.asTimestamp;
-            return (dpiTimestamp) val;
+            return _data->value.asTimestamp;
         }
 
         throw Exception(sfput("Could not convert column index ${} to dpiTimestamp. "
@@ -139,8 +145,11 @@ private:
         }
 
         if (_nativeTypeNum == DPI_NATIVE_TYPE_DOUBLE) {
-            double val = dataToDouble();
-            return std::to_string(val);
+            return std::to_string(dataToDouble());
+        }
+
+        if (_nativeTypeNum == DPI_NATIVE_TYPE_INT64) {
+            return std::to_string(dataToInt64());
         }
 
         throw Exception(sfput("Could not convert column index ${} to std::string. "
@@ -153,6 +162,16 @@ private:
         if (_found == False) {
             throw DBException("Can not fetch column, no rows currently available.");
         }
+
+        /*
+         * https://oracle.github.io/odpi/doc/functions/dpiStmt.html#c.dpiStmt_getQueryValue
+         * From Oracle ODPI documentation:
+         * data [OUT] – a pointer to a reference to an internally created dpiData structure which will be populated
+         * upon successful completion of this function. The structure contains the value of the column at the specified
+         * position. Note that any references to LOBs, statements, objects and rowids are owned by the statement.
+         *
+         * That means, that we don't own the _data pointer, and should not free it ourselves.
+         */
         _col = col;
         if (dpiStmt_getQueryValue(_stmt, col, &_nativeTypeNum, &_data) < 0) {
             DBException ex = DBException::build(_ctx);
@@ -164,10 +183,34 @@ public:
     ResultSet(dpiContext *ctx, dpiStmt *stmt) {
         _ctx = ctx;
         _stmt = stmt;
-        if (dpiStmt_execute(_stmt, DPI_MODE_EXEC_DEFAULT, NULL) < 0) {
+        if (dpiStmt_execute(_stmt, DPI_MODE_EXEC_DEFAULT, &_columnCount) < 0) {
             DBException ex = DBException::build(_ctx);
             throw ex;
         }
+    }
+
+    // Rule of five
+    // =========================================================================
+    // 1. Copy Constructor
+    // No copy constructor allowed
+    ResultSet(const ResultSet&) = delete;
+
+    // 2. Copy Assignment
+    // No copy assignment allowed
+    ResultSet& operator=(const ResultSet& other) = delete;
+
+    // 3. Move Constructor
+    // Allowed
+
+    // 4. Move Assignment
+    // Allowed
+
+    // 5. Destructor
+    // Implemented
+    // =========================================================================
+
+    UInt32 columnCount() {
+        return _columnCount;
     }
 
     Bool next() {
@@ -208,7 +251,12 @@ public:
     }
 
     Int32 getInt32(unsigned int col) {
-        return (Int32) getInt64(col);
+        Int64 val = getInt64(col);
+        if (val > std::numeric_limits<Int32>::max() ||
+            val < std::numeric_limits<Int32>::lowest()) {
+            throw Exception(sfput("The value for colum ${}, is outside of the Int32 limits.", col));
+        }
+        return (Int32) val;
     }
 
     Date getDate(unsigned int col) {
@@ -216,8 +264,8 @@ public:
         dpiTimestamp timestamp = dataToTimestamp();
 
         tm t = ctimeGMT();
-        t.tm_year = timestamp.year - 1900;
-        t.tm_mon = timestamp.month - 1;
+        t.tm_year = timestamp.year - 1900; //tm year is since 1900
+        t.tm_mon = timestamp.month - 1; //tm month is [0, 11]
         t.tm_mday = timestamp.day;
 
         time_t tt = timegm(&t) +
@@ -227,6 +275,12 @@ public:
         tm t2 = *gmtime(&tt);
 
         return Date(t2);
+    }
+
+    void forEach(std::function<void(ResultSet&)> f){
+        while (next() == True) {
+            f(*this);
+        }
     }
 };
 
@@ -240,19 +294,14 @@ private:
 
 
     void bindByPos(unsigned int col, dpiNativeTypeNum nativeTypeNum, dpiData &data) {
-        int res = DPI_FAILURE; //let's assume failure as default
-        res = dpiStmt_bindValueByPos(_stmt, col, nativeTypeNum, &data);
-        if (res == DPI_FAILURE) {
+        if (dpiStmt_bindValueByPos(_stmt, col, nativeTypeNum, &data) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
     }
 
     void bindByName(const char *param, dpiNativeTypeNum nativeTypeNum, dpiData &data) {
         size_t len = strlen(param);
-
-        int res = DPI_FAILURE; //let's assume failure as default
-        res = dpiStmt_bindValueByName(_stmt, param, len, nativeTypeNum, &data);
-        if (res == DPI_FAILURE) {
+        if (dpiStmt_bindValueByName(_stmt, param, len, nativeTypeNum, &data) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
     }
@@ -265,6 +314,26 @@ public:
             throw DBException::build(_ctx);
         }
     }
+
+    // Rule of five
+    // =========================================================================
+    // 1. Copy Constructor
+    // No copy constructor allowed
+    DBStatement(const DBStatement&) = delete;
+
+    // 2. Copy Assignment
+    // No copy assignment allowed
+    DBStatement& operator=(const DBStatement& other) = delete;
+
+    // 3. Move Constructor
+    // Allowed
+
+    // 4. Move Assignment
+    // Allowed
+
+    // 5. Destructor
+    // Implemented
+    // =========================================================================
 
     void setNull(unsigned int col, dpiNativeTypeNum typeNum) {
         checkParamIsPositive("col", col);
@@ -460,7 +529,7 @@ public:
         }
     }
 
-    void setDate(const char *param, const core::Date &date) {
+    void setDate(const char *param, const core::Date date) {
         dpiData data;
 
         dpiData_setTimestamp(&data, date.year(),
@@ -475,10 +544,7 @@ public:
     }
 
     void exec() {
-        int res = DPI_FAILURE; //let's asume failure as default
-        //execute
-        res = dpiStmt_execute(_stmt, DPI_MODE_EXEC_DEFAULT, NULL);
-        if (res == DPI_FAILURE) {
+        if (dpiStmt_execute(_stmt, DPI_MODE_EXEC_DEFAULT, NULL) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
     }
@@ -486,17 +552,14 @@ public:
 
     Int64 getRowCount() {
         uint64_t count;
-        int res = DPI_FAILURE;
-        res = dpiStmt_getRowCount(_stmt, &count);
-        if (res == DPI_FAILURE) {
+        if (dpiStmt_getRowCount(_stmt, &count) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
         return (Int64) count;
     }
 
     ResultSet execQuery() {
-        ResultSet rs{_ctx, _stmt};
-        return rs;
+        return {_ctx, _stmt};
     }
 
     Int64 execCount() {
@@ -509,24 +572,30 @@ public:
     }
 
     string getLastRowId() {
-        dpiRowid *id;
-        int res = DPI_FAILURE;
-        res = dpiStmt_getLastRowid(_stmt, &id);
-        if (res == DPI_FAILURE) {
+
+        /*
+         * According to Oracle documentation:
+         * If a rowid is returned, the reference will remain valid until the next call to this function or until the
+         * statement is closed.
+         *
+         * That means, that we don't own the dpiRowid pointer.
+         */
+
+        dpiRowid *id; //not owning
+
+        if (dpiStmt_getLastRowid(_stmt, &id) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
 
-        const char *base64;
+        const char *base64; //not owning
         uint32_t len;
-        res = dpiRowid_getStringValue(id, &base64, &len);
-        if (res == DPI_FAILURE) {
+        if (dpiRowid_getStringValue(id, &base64, &len) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
 
         string ans{base64, len};
         return ans;
     }
-
 
     virtual ~DBStatement() {
         try {
@@ -554,7 +623,7 @@ public:
                 user, strlen(user),
                 pass, strlen(pass),
                 connStr, strlen(connStr),
-                NULL, NULL, &_conn) < 0) {
+                NULL, NULL, &_conn) == DPI_FAILURE) {
             throw DBException::build(ctx);
         }
     }
@@ -569,14 +638,32 @@ public:
 
     }
 
+    // Rule of five
+    // =========================================================================
+    // 1. Copy Constructor
+    // No copy constructor allowed
+    DBConnection(const DBConnection&) = delete;
+
+    // 2. Copy Assignment
+    // No copy assignment allowed
+    DBConnection& operator=(const DBConnection& other) = delete;
+
+    // 3. Move Constructor
+    // Allowed
+
+    // 4. Move Assignment
+    // Allowed
+
+    // 5. Destructor
+    // Implemented
+    // =========================================================================
+
     DBStatement statement(const char *sql) {
-        DBStatement stmt{_ctx, _conn, sql};
-        return stmt;
+        return {_ctx, _conn, sql};
     }
 
     DBStatement statement(string sql) {
-        DBStatement stmt{_ctx, _conn, sql.c_str()};
-        return stmt;
+        return {_ctx, _conn, sql.c_str()};
     }
 
 
@@ -656,19 +743,43 @@ private:
 public:
     DBEnvironment() {
         dpiErrorInfo err;
-        if (dpiContext_create(DPI_MAJOR_VERSION, DPI_MINOR_VERSION, &_ctx, &err) < 0) {
+        if (dpiContext_createWithParams(DPI_MAJOR_VERSION,
+                                        DPI_MINOR_VERSION,
+                                        NULL, &_ctx, &err) == DPI_FAILURE) {
+
+
+
+
             throw DBException::build(_ctx, &err);
         }
     }
 
+    // Rule of five
+    // =========================================================================
+    // 1. Copy Constructor
+    // No copy constructor allowed
+    DBEnvironment(const DBConnection&) = delete;
+
+    // 2. Copy Assignment
+    // No copy assignment allowed
+    DBEnvironment& operator=(const DBEnvironment& other) = delete;
+
+    // 3. Move Constructor
+    // Allowed
+
+    // 4. Move Assignment
+    // Allowed
+
+    // 5. Destructor
+    // Implemented
+    // =========================================================================
+
     DBConnection connect(string user, string pass, string connStr) {
-        DBConnection conn{_ctx, user, pass, connStr};
-        return conn;
+        return {_ctx, user, pass, connStr};
     }
 
     DBConnection connect(const char *user, const char *pass, const char *connStr) {
-        DBConnection conn{_ctx, user, pass, connStr};
-        return conn;
+        return {_ctx, user, pass, connStr};
     }
 
     virtual ~DBEnvironment() {

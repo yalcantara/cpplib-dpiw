@@ -1,7 +1,9 @@
 FROM ubuntu:23.04
 RUN apt-get update
-RUN apt-get --assume-yes install cmake clang wget
-WORKDIR /usr/src/oracle/odpi/include
-RUN wget https://raw.githubusercontent.com/oracle/odpi/main/include/dpi.h
+RUN apt-get --assume-yes install cmake clang git
+WORKDIR /usr/src
+RUN git clone https://github.com/oracle/odpi.git
+RUN git clone https://github.com/yalcantara/cpplib-core.git
 WORKDIR /usr/src/cpplib-dpiw
+RUN mkdir cmake-build-debug
 CMD ["/bin/bash"]
