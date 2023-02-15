@@ -17,7 +17,7 @@ A thin wrapper for ODPI, that simplify most commons task such as, preparing stat
 Since the cpplib-dpiw depends on ODPI, make sure to clone the repo (https://github.com/oracle/odpi) at the same 
 directory level where cpplib-dpiw is. Also, clone cpplib-core in the same directory level.
 
-First, build the Docker:
+First, build the image:
 ```shell
 ./build-image.sh
 ```
@@ -26,8 +26,8 @@ Then, compile:
 ./compile.sh
 ```
 
-Also make sure the `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` in macOS, environment 
-variable, contains the path to Oracle instant client binary folder.
+Also, make sure the `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` in macOS, environment variable, contains the path to Oracle 
+instant client binary folder.
 
 ```shell
 // Linux
@@ -45,14 +45,14 @@ app_user = <username>
 app_pass = <password>
 app_tnsp = <TNS connection>
 ```
-If you'll like to use Oracle cloud wallet, you can specify the path where the wallet is in the TNS .ora file. Please 
+If you'd like to use Oracle cloud wallet, you can specify the path where the wallet is in the TNS .ora file. Please 
 consult Oracle Documentation regarding connection strings, TNS, and Client Wallet.
 
-Developers note: In your IDE of choice you can pass the above environment variable by configuring the 
+Developers note: In your IDE of choice, you can pass the above environment variable by configuring the 
 Run/Debug configuration. 
 
 ## Usage
-Start by cloning the repo in a path that is easy to search from your project. Add to your include folder 
+Start by cloning the repo in a path easy to search from your project. Add to your include folder 
 cpplib-dpiw/include. Link with **oci**.
 
 ### Example
