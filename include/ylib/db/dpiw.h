@@ -174,8 +174,7 @@ private:
          */
         _col = col;
         if (dpiStmt_getQueryValue(_stmt, col, &_nativeTypeNum, &_data) < 0) {
-            DBException ex = DBException::build(_ctx);
-            throw ex;
+            throw DBException::build(_ctx);
         }
     }
 
@@ -608,7 +607,6 @@ public:
     }
 };
 
-
 class DBConnection {
 private:
     dpiContext *_ctx = nullptr; //not owned
@@ -668,19 +666,15 @@ public:
 
 
     void commit() {
-        int res = DPI_FAILURE; //let's asume failure as default
         // commit changes
-        res = dpiConn_commit(_conn);
-        if (res == DPI_FAILURE) {
+        if (dpiConn_commit(_conn) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
     }
 
     void rollack() {
-        int res = DPI_FAILURE; //let's asume failure as default
         // rollback changes
-        res = dpiConn_rollback(_conn);
-        if (res == DPI_FAILURE) {
+        if (dpiConn_rollback(_conn) == DPI_FAILURE) {
             throw DBException::build(_ctx);
         }
     }
