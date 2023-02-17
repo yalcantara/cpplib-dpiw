@@ -9,6 +9,7 @@ build
 
 # CMake
 CMakeFiles
+cmake-build-debug
 
 # Mac
 *.DS_Store
