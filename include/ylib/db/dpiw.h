@@ -485,7 +485,7 @@ public:
         Int32 fractions = time.milli();
         fractions = fractions * ((Int32) 1000000);
         dpiData_setTimestamp(&data, date.year(),
-                             date.month(),
+                             monthToUInt(date.month()),
                              date.day(),
                              time.hour(),
                              time.min(),
@@ -502,7 +502,7 @@ public:
         Int32 fractions = time.milli();
         fractions = fractions * ((Int32) 1000000);
         dpiData_setTimestamp(&data, date.year(),
-                             date.month(),
+                             monthToUInt(date.month()),
                              date.day(),
                              time.hour(),
                              time.min(),
@@ -532,7 +532,7 @@ public:
         dpiData data;
 
         dpiData_setTimestamp(&data, date.year(),
-                             date.month(),
+                             monthToUInt(date.month()),
                              date.day(),
                              0,
                              0,

@@ -38,14 +38,16 @@ DYLD_LIBRARY_PATH=/opt/oracle/instantclient_19_8
 ```
 
 ### Running locally
-To run the `main` program, besides doing the above steps, you'll also need to set the following environment variables:
+To run the `main` program, besides doing the above steps, you'll also need to set the following variables in a 
+properties file, named db.properties:
 
 ```shell
 app_user = <username>
 app_pass = <password>
 app_tnsp = <TNS connection>
 ```
-If you'd like to use Oracle cloud wallet, you can specify the path where the wallet is in the TNS .ora file. Please 
+The parent dir containing the db.properties file must be set in an environment variable named app_config_path.
+If you'd like to use Oracle cloud wallet, you can specify the path where the wallet is in the .ora file. Please 
 consult Oracle Documentation regarding connection strings, TNS, and Client Wallet.
 
 Developers note: In your IDE of choice, you can pass the above environment variable by configuring the 
