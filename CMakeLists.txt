@@ -7,8 +7,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include_directories(include)
-include_directories(../cpplib-core/include)
 include_directories(../odpi/include)
+include_directories(../cpplib-core/include)
 
 add_executable(main main.cpp ../odpi/embed/dpi.c)
 
