@@ -1,6 +1,7 @@
-FROM ubuntu:23.04
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update
-RUN apt-get --assume-yes install cmake clang git
+RUN apt-get install -y cmake clang git
 WORKDIR /usr/src
 RUN git clone https://github.com/oracle/odpi.git
 RUN git clone https://github.com/yalcantara/cpplib-core.git

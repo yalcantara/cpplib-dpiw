@@ -10,7 +10,7 @@ using namespace ylib::utils;
 using namespace ylib::db::dpiw;
 
 
-int main(){
+int main() {
 
     auto configPath = fs::path(checkAndGetEnv("app_config_path"));
 
@@ -26,8 +26,13 @@ int main(){
     auto stm = conn.statement("SELECT table_name, num_rows FROM user_tables");
 
     println("table_name     num_rows");
-    stm.execQuery().forEach([](ResultSet &r){
+    stm.execQuery().forEach([](ResultSet &r) {
         printf("%s  %d\n", r.getString(1).c_str(), r.getInt32(2));
+    });
+
+    conn.transaction([]() -> Int64 {
+        println("======>>Inside transaction");
+        return 0;
     });
 
     return EXIT_SUCCESS;
